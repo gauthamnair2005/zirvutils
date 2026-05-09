@@ -33,7 +33,8 @@ LIBC_SRCS := \
     $(LIBC_DIR)/src/ctype.c \
     $(LIBC_DIR)/src/stdio.c \
     $(LIBC_DIR)/src/unistd.c \
-    $(LIBC_DIR)/src/syscall.c
+    $(LIBC_DIR)/src/syscall.c \
+    $(LIBC_DIR)/src/datetime.c
 
 LIBC_BUILD := build/libc
 LIBC_OBJS := $(patsubst $(LIBC_DIR)/src/%.c,$(LIBC_BUILD)/%.o,$(LIBC_SRCS))
