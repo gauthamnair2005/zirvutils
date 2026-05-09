@@ -41,7 +41,7 @@ LIBC_OBJS := $(patsubst $(LIBC_DIR)/src/%.c,$(LIBC_BUILD)/%.o,$(LIBC_SRCS))
 
 CRT0 := src/crt0.o
 
-UTILS := hello cat sysinfo clear echo
+UTILS := hello cat sysinfo clear echo reboot shutdown suspend poweroff
 UTIL_ELFS := $(addsuffix .elf,$(UTILS))
 UTIL_OBJS := $(addprefix src/,$(addsuffix .o,$(UTILS)))
 
