@@ -6,7 +6,11 @@ ifeq (, $(shell which $(CC) 2>/dev/null))
   LD := ld
 endif
 
-LIBC_DIR := ../zirvlibc
+ifeq ($(wildcard ../zirvlibc/include/unistd.h),)
+  LIBC_DIR := ../libs/zirvlibc
+else
+  LIBC_DIR := ../zirvlibc
+endif
 
 CFLAGS := \
     -std=c11 \
