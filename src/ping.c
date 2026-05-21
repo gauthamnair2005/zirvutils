@@ -98,49 +98,12 @@ static void ip_to_str(uint32_t ip, char *buf)
         (ip >> 8) & 0xFF, ip & 0xFF);
 }
 
-/* ─── Get our MAC by reading first received frame ────────────────────────── */
+/* ─── Get our MAC — learned later from the first ARP reply's dst ──────────── */
 static int get_our_mac(void)
 {
-    /* Send a gratuitous ARP request to learn our MAC from the echoed frame */
-    uint8_t buf[sizeof(struct eth_hdr) + sizeof(struct arp_pkt)];
-    struct eth_hdr *eth = (struct eth_hdr *)buf;
-    struct arp_pkt *arp = (struct arp_pkt *)(eth + 1);
-
-    memcpy(eth->dst, g_bcast_mac, 6);
-    memset(eth->src, 0, 6);
-    eth->type = ETH_TYPE_ARP;
-
-    arp->hw_type    = 1;
-    arp->proto_type = 0x0008;
-    arp->hw_len     = 6;
-    arp->proto_len  = 4;
-    arp->op         = ARP_OP_REQ;
-    memset(arp->sender_mac, 0, 6);
-    arp->sender_ip[0] = 10; arp->sender_ip[1] = 0;
-    arp->sender_ip[2] = 2;  arp->sender_ip[3] = 15;
-    memset(arp->target_mac, 0, 6);
-    memset(arp->target_ip, 0, 4);
-
-    write(g_fd, buf, sizeof(buf));
-
-    /* Best effort: try to receive a frame to learn our MAC from src */
-    for (int i = 0; i < 1000; i++) {
-        uint8_t rbuf[2048];
-        int n = read(g_fd, rbuf, sizeof(rbuf));
-        if (n < (int)sizeof(struct eth_hdr)) continue;
-        struct eth_hdr *re = (struct eth_hdr *)rbuf;
-        /* Use source MAC from any broadcast frame directed at us */
-        if (re->dst[0] == 0xFF || re->dst[0] == g_bcast_mac[0]) {
-            memcpy(g_our_mac, re->dst, 6); /* dst of broadcast = ff:... */
-            memcpy(g_our_mac, re->src, 6);
-            return 0;
-        }
-        /* Also accept frames where we are the dst */
-        /* But we don't know our MAC yet... try the sender */
-    }
-    /* Fallback */
-    memset(g_our_mac, 0x02, 6);
-    g_our_mac[5] = 0x01;
+    /* Will be filled in by arp_resolve when the first ARP reply arrives.
+       MAC 00:00:00:00:00:00 is a valid placeholder — we update it on RX. */
+    memset(g_our_mac, 0, 6);
     return 0;
 }
 
@@ -191,6 +154,9 @@ static int arp_resolve(uint32_t target_ip)
         if (resp_ip != target_ip) continue;
 
         memcpy(g_target_mac, ra->sender_mac, 6);
+        /* Learn our own MAC from the Ethernet dst of the received frame */
+        if (g_our_mac[0] == 0 && g_our_mac[1] == 0 && g_our_mac[2] == 0)
+            memcpy(g_our_mac, re->dst, 6);
         return 0;
     }
     return -1;
@@ -303,6 +269,13 @@ int main(int argc, char *argv[])
         g_target_mac[0], g_target_mac[1], g_target_mac[2],
         g_target_mac[3], g_target_mac[4], g_target_mac[5]);
     printf("ARP resolved %s at %s\n", target_str, tmac);
+
+    /* Fallback: if we still don't know our MAC, fabricate one */
+    if (g_our_mac[0] == 0 && g_our_mac[1] == 0 && g_our_mac[2] == 0) {
+        g_our_mac[0] = 0x02; g_our_mac[1] = 0x00;
+        g_our_mac[2] = 0x00; g_our_mac[3] = 0x00;
+        g_our_mac[4] = 0x00; g_our_mac[5] = 0x01;
+    }
 
     int sent = 0, received = 0;
     for (int seq = 1; seq <= count; seq++) {
