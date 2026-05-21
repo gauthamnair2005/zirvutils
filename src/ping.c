@@ -98,12 +98,14 @@ static void ip_to_str(uint32_t ip, char *buf)
         (ip >> 8) & 0xFF, ip & 0xFF);
 }
 
-/* ─── Get our MAC — learned later from the first ARP reply's dst ──────────── */
+/* ─── Get our MAC — fallback; updated from ARP reply dst on first RX ──────── */
 static int get_our_mac(void)
 {
-    /* Will be filled in by arp_resolve when the first ARP reply arrives.
-       MAC 00:00:00:00:00:00 is a valid placeholder — we update it on RX. */
-    memset(g_our_mac, 0, 6);
+    /* Use a non-zero fallback so ARP requests are well-formed.  The real MAC
+       is learned later from the first ARP reply's Ethernet destination. */
+    g_our_mac[0] = 0x02; g_our_mac[1] = 0x00;
+    g_our_mac[2] = 0x00; g_our_mac[3] = 0x00;
+    g_our_mac[4] = 0x00; g_our_mac[5] = 0x01;
     return 0;
 }
 
@@ -234,8 +236,15 @@ int main(int argc, char *argv[])
     if (argc >= 2) {
         target = parse_ip(argv[1]);
         if (target == 0) {
-            printf("ping: bad IP '%s'\n", argv[1]);
-            return 1;
+            /* Not a dotted IP — try DNS lookup */
+            target = dns_lookup(argv[1]);
+            if (target == 0) {
+                printf("ping: bad IP '%s' and DNS lookup failed\n", argv[1]);
+                return 1;
+            }
+            printf("ping: %s resolved to %u.%u.%u.%u\n", argv[1],
+                (target >> 24) & 0xFF, (target >> 16) & 0xFF,
+                (target >> 8) & 0xFF, target & 0xFF);
         }
     } else {
         target = (10u << 24) | (0 << 16) | (2 << 8) | 2; /* 10.0.2.2 */
