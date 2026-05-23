@@ -182,7 +182,7 @@ int main(int argc, char **argv)
         played += w;
     }
 
-    printf("Played %d frames (%.1f seconds)\n",
-           g_pcm_frames, (float)g_pcm_frames / SAMPLE_RATE);
+    printf("Played %d frames (%d seconds)\n",
+           g_pcm_frames, g_pcm_frames / SAMPLE_RATE);
     return 0;
 }
