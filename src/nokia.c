@@ -178,8 +178,9 @@ int main(int argc, char **argv)
         int chunk = g_pcm_frames - played;
         if (chunk > 4096) chunk = 4096;
         int w = audio_play(g_pcm + played * 2, (unsigned int)chunk);
-        if (w <= 0) break;
-        played += w;
+        if (w > 0) {
+            played += w;
+        }
     }
 
     printf("Played %d frames (%d seconds)\n",
