@@ -138,10 +138,11 @@ static int arp_resolve(uint32_t target_ip)
 
     write(g_fd, buf, sizeof(buf));
 
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < 500; i++) {
         uint8_t rbuf[2048];
         int n = read(g_fd, rbuf, sizeof(rbuf));
-        if (n < (int)(sizeof(struct eth_hdr) + sizeof(struct arp_pkt))) continue;
+        if (n < 0) break;
+        if (n < (int)(sizeof(struct eth_hdr) + sizeof(struct arp_pkt))) { msleep(5); continue; }
 
         struct eth_hdr *re = (struct eth_hdr *)rbuf;
         if (re->type != ETH_TYPE_ARP) continue;
@@ -204,11 +205,11 @@ static int ping_send_recv(uint32_t target_ip, int seq, int *got_reply)
 
     write(g_fd, pkt, total_pkt);
 
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < 500; i++) {
         uint8_t rbuf[2048];
         int n = read(g_fd, rbuf, sizeof(rbuf));
-        if (n < (int)(sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct icmp_hdr)))
-            continue;
+        if (n < 0) break;
+        if (n < (int)(sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct icmp_hdr))) { msleep(5); continue; }
 
         struct eth_hdr *re = (struct eth_hdr *)rbuf;
         if (re->type != ETH_TYPE_IP) continue;
