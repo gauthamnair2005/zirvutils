@@ -13,18 +13,6 @@ struct eth_hdr {
     uint16_t type;
 } __attribute__((packed));
 
-struct arp_pkt {
-    uint16_t hw_type;
-    uint16_t proto_type;
-    uint8_t  hw_len;
-    uint8_t  proto_len;
-    uint16_t op;
-    uint8_t  sender_mac[6];
-    uint8_t  sender_ip[4];
-    uint8_t  target_mac[6];
-    uint8_t  target_ip[4];
-} __attribute__((packed));
-
 struct ip_hdr {
     uint8_t  ver_ihl;
     uint8_t  dscp_ecn;
@@ -47,16 +35,10 @@ struct icmp_hdr {
 } __attribute__((packed));
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
-#define ETH_TYPE_ARP  0x0608
 #define ETH_TYPE_IP   0x0008
-#define ARP_OP_REQ    0x0100
-#define ARP_OP_REP    0x0200
 #define IP_PROTO_ICMP 1
 #define ICMP_ECHO     8
 #define ICMP_REPLY    0
-
-#define BROADCAST_MAC  {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}
-static const uint8_t g_bcast_mac[6] = BROADCAST_MAC;
 
 /* Our assumed MAC (filled from device) and IP */
 static uint8_t  g_our_mac[6];
@@ -107,62 +89,6 @@ static int get_our_mac(void)
     g_our_mac[2] = 0x00; g_our_mac[3] = 0x00;
     g_our_mac[4] = 0x00; g_our_mac[5] = 0x01;
     return 0;
-}
-
-/* ─── ARP resolve: get MAC for target IP ─────────────────────────────────── */
-static int arp_resolve(uint32_t target_ip)
-{
-    uint8_t buf[sizeof(struct eth_hdr) + sizeof(struct arp_pkt)];
-    struct eth_hdr *eth = (struct eth_hdr *)buf;
-    struct arp_pkt *arp = (struct arp_pkt *)(eth + 1);
-
-    memcpy(eth->dst, g_bcast_mac, 6);
-    memcpy(eth->src, g_our_mac, 6);
-    eth->type = ETH_TYPE_ARP;
-
-    arp->hw_type    = 1;
-    arp->proto_type = 0x0008;
-    arp->hw_len     = 6;
-    arp->proto_len  = 4;
-    arp->op         = ARP_OP_REQ;
-    memcpy(arp->sender_mac, g_our_mac, 6);
-    arp->sender_ip[0] = (g_our_ip >> 24) & 0xFF;
-    arp->sender_ip[1] = (g_our_ip >> 16) & 0xFF;
-    arp->sender_ip[2] = (g_our_ip >> 8) & 0xFF;
-    arp->sender_ip[3] = g_our_ip & 0xFF;
-    memset(arp->target_mac, 0, 6);
-    arp->target_ip[0] = (target_ip >> 24) & 0xFF;
-    arp->target_ip[1] = (target_ip >> 16) & 0xFF;
-    arp->target_ip[2] = (target_ip >> 8) & 0xFF;
-    arp->target_ip[3] = target_ip & 0xFF;
-
-    write(g_fd, buf, sizeof(buf));
-
-    for (int i = 0; i < 500; i++) {
-        uint8_t rbuf[2048];
-        int n = read(g_fd, rbuf, sizeof(rbuf));
-        if (n < 0) break;
-        if (n < (int)(sizeof(struct eth_hdr) + sizeof(struct arp_pkt))) { msleep(5); continue; }
-
-        struct eth_hdr *re = (struct eth_hdr *)rbuf;
-        if (re->type != ETH_TYPE_ARP) continue;
-
-        struct arp_pkt *ra = (struct arp_pkt *)(re + 1);
-        if (ra->op != ARP_OP_REP) continue;
-
-        uint32_t resp_ip = (uint32_t)ra->sender_ip[0] << 24 |
-                          (uint32_t)ra->sender_ip[1] << 16 |
-                          (uint32_t)ra->sender_ip[2] << 8  |
-                          (uint32_t)ra->sender_ip[3];
-        if (resp_ip != target_ip) continue;
-
-        memcpy(g_target_mac, ra->sender_mac, 6);
-        /* Learn our own MAC from the Ethernet dst of the received frame */
-        if (g_our_mac[0] == 0 && g_our_mac[1] == 0 && g_our_mac[2] == 0)
-            memcpy(g_our_mac, re->dst, 6);
-        return 0;
-    }
-    return -1;
 }
 
 /* ─── Send ICMP echo request, wait for reply ─────────────────────────────── */
@@ -268,8 +194,8 @@ int main(int argc, char *argv[])
 
     printf("PING %s (%s) from %s\n", target_str, target_str, mac_str);
 
-    if (arp_resolve(target) < 0) {
-        printf("ping: %s: no ARP reply\n", target_str);
+    if (net_resolve(target, g_target_mac) < 0) {
+        printf("ping: %s: no route to host\n", target_str);
         close(g_fd);
         return 1;
     }
@@ -278,7 +204,7 @@ int main(int argc, char *argv[])
     snprintf(tmac, sizeof(tmac), "%02x:%02x:%02x:%02x:%02x:%02x",
         g_target_mac[0], g_target_mac[1], g_target_mac[2],
         g_target_mac[3], g_target_mac[4], g_target_mac[5]);
-    printf("ARP resolved %s at %s\n", target_str, tmac);
+    printf("Resolved %s via %s\n", target_str, tmac);
 
     /* Fallback: if we still don't know our MAC, fabricate one */
     if (g_our_mac[0] == 0 && g_our_mac[1] == 0 && g_our_mac[2] == 0) {
