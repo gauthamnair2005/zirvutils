@@ -42,7 +42,7 @@ LIBC_OBJS := $(patsubst $(LIBC_DIR)/src/%.c,$(LIBC_BUILD)/%.o,$(LIBC_SRCS))
 
 CRT0 := src/crt0.o
 
-UTILS := hello cat sysinfo clear echo reboot shutdown suspend poweroff ping sleep true false yes uname hostname ifconfig lspci nokia
+UTILS := hello cat sysinfo clear echo reboot shutdown suspend poweroff ping sleep true false yes uname hostname ifconfig lspci nokia snapshot
 UTIL_ELFS := $(addsuffix .elf,$(UTILS))
 UTIL_OBJS := $(addprefix src/,$(addsuffix .o,$(UTILS)))
 
